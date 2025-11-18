@@ -1,0 +1,44 @@
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
+*.log
+*.tmp
+*.sqlite3
+
+# Virtual environments
+.venv/
+venv/
+.env/
+.envrc
+
+# Jupyter and notebooks
+.ipynb_checkpoints/
+*.nbconvert.ipynb
+
+# VS Code / Editors
+.vscode/
+.history/
+*.code-workspace
+
+# Devcontainer build artifacts
+.devcontainer/__pycache__/
+
+# Data outputs
+outputs/
+*.parquet
+*.feather
+*.zip
+
+# Cache
+.cache/
+.mypy_cache/
+.pytest_cache/
