@@ -8,6 +8,9 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 - Devcontainer setup (`.devcontainer/`) with Python and geospatial dependencies for running hackathon pipelines.
 - Repository hygiene updates: `.gitignore` for editor/temp files and `.gitattributes` to normalise line endings across OSes.
+- Data acquisition tooling:
+  - `src/data_download.py` helper for GtR+ and Ofcom downloads (with placeholders for future MSTI pulls).
+  - Structured `data/` workspace (tracked README + manifests, raw/processed folders kept out of git) plus cached Connected Nations Spring 2025 bundles for immediate analysis.
 
 ## [0.1.0] - 2025-11-18
 
@@ -19,4 +22,3 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.
   - Generic prompts for Deep Research, Code, Insight and Slides agents in `prompts/`.
   - `src/common_pipeline.py` Python scaffold for reusable data loading and summarisation.
   - `config/datasets.md` with notes on expected sources and keys.
-

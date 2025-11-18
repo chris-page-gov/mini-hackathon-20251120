@@ -17,3 +17,4 @@ jupyterlab
 ipykernel
 tqdm
 python-dotenv
+pandasdmx

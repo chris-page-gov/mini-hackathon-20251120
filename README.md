@@ -21,6 +21,19 @@ This repository provides a reusable scaffold for the mini hackathon built around
 - A light‑weight **agent pattern** (using ChatGPT / Deep Research / Codex‑style tools) is defined in `agents.md` so you can plug this into your preferred AI tooling.
 
 Use this repo as a starting point: copy it, adapt the plans, and swap in the actual code and dashboards you build during the hackathon.
+## Quick data acquisition
+
+A helper script (`src/data_download.py`) automates the tedious download steps so you can get straight to analysis:
+
+```bash
+# Grab Ofcom Connected Nations files (and unzip them)
+python src/data_download.py digital --extract
+
+# Pull a recent slice of GtR+ projects (adjust --since-year / --max-pages as needed)
+python src/data_download.py gtr --resource projects --since-year 2015 --max-pages 50
+```
+
+The script writes into `data/raw/…` (ignored by git); keep short MANIFEST.md notes in those folders so others know which filters you used. The MSTI / GBARD download flow still requires an OECD API query to be agreed—drop the exported CSV and manifest under `data/raw/msti/` for now.
 
 ## Repository structure
 

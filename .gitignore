@@ -37,6 +37,9 @@ outputs/
 *.parquet
 *.feather
 *.zip
+# Data workspace (track metadata files via nested .gitignore rules)
+data/processed/
+data/geo/
 
 # Cache
 .cache/

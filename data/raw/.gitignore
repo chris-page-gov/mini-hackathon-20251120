@@ -1,0 +1,6 @@
+# Ignore everything in data/raw except manifest notes and this file
+*
+!.gitignore
+!*/
+!MANIFEST.md
+!**/MANIFEST.md
