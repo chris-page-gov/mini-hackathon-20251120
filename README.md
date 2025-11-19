@@ -31,9 +31,15 @@ python src/data_download.py digital --extract
 
 # Pull a recent slice of GtR+ projects (adjust --since-year / --max-pages as needed)
 python src/data_download.py gtr --resource projects --since-year 2015 --max-pages 50
+
+# Fetch OECD MSTI / GBARD data (adjust countries / years as needed)
+python src/data_download.py msti --countries GBR,USA,DEU,FRA,JPN,CAN,ITA --start-year 2010 --end-year 2024
+
+# Build LAD-level digital + deprivation metrics for mapping
+python src/build_lad_metrics.py
 ```
 
-The script writes into `data/raw/…` (ignored by git); keep short MANIFEST.md notes in those folders so others know which filters you used. The MSTI / GBARD download flow still requires an OECD API query to be agreed—drop the exported CSV and manifest under `data/raw/msti/` for now.
+The script writes into `data/raw/…` (ignored by git); keep short MANIFEST.md notes in those folders so others know which filters you used. Processed artefacts (Parquet/CSV) land under `data/processed/` ready for analysis or feeding the Streamlit app.
 
 ## Repository structure
 

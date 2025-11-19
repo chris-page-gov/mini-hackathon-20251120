@@ -24,8 +24,9 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Iterable, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
+import pandas as pd
 import requests
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -45,6 +46,22 @@ DIGITAL_FILES: Dict[str, str] = {
     "digital/about_mobile_data.pdf": "https://www.ofcom.org.uk/siteassets/resources/documents/research-and-data/multi-sector/infrastructure-research/connect-nations-spring-2025/data-downloads/about-this-data-mobile-coverage.pdf?v=396503",
 }
 
+OECD_BASE_URL = "https://sdmx.oecd.org/public/rest"
+OECD_GBARD_FLOW = "DSD_RDS_GOV@DF_GBARD_NABS07"
+
+REF_AREA_LABELS = {
+    "GBR": "United Kingdom",
+    "USA": "United States",
+    "DEU": "Germany",
+    "FRA": "France",
+    "JPN": "Japan",
+    "CAN": "Canada",
+    "ITA": "Italy",
+    "AUS": "Australia",
+    "KOR": "South Korea",
+    "CHN": "China",
+}
+
 
 @dataclass
 class DownloadStats:
@@ -53,15 +70,22 @@ class DownloadStats:
     duration_s: float
 
 
-def _request_json(url: str, params: Optional[dict] = None) -> dict:
-    response = requests.get(
-        url,
-        params=params,
-        headers={"Accept": "application/json"},
-        timeout=60,
-    )
+def _request_json(url: str, params: Optional[dict] = None, retries: int = 8) -> dict:
+    for attempt in range(retries):
+        response = requests.get(
+            url,
+            params=params,
+            headers={"Accept": "application/json"},
+            timeout=60,
+        )
+        if response.status_code == 429 and attempt < retries - 1:
+            wait = min(60, 2 ** attempt)
+            print(f"[gtr] rate limited, sleeping {wait}s before retry")
+            time.sleep(wait)
+            continue
+        response.raise_for_status()
+        return response.json()
     response.raise_for_status()
-    return response.json()
 
 
 def _download_file(url: str, dest: Path, overwrite: bool = False) -> None:
@@ -94,6 +118,8 @@ def download_gtr(
     fetch_size: int,
     max_pages: Optional[int],
     output_name: Optional[str],
+    delay: float,
+    log_every: int = 100,
 ) -> DownloadStats:
     resource = resource.lower()
     if resource not in GTR_RESOURCE_KEYS:
@@ -120,6 +146,7 @@ def download_gtr(
                 break
             params = {
                 "fetchSize": fetch_size,
+                "size": fetch_size,
                 "page": page,
             }
             payload = _request_json(base_url, params=params)
@@ -137,9 +164,11 @@ def download_gtr(
             downloaded += kept
             total_pages = payload.get("totalPages", total_pages)
             total_size = payload.get("totalSize")
-            print(
-                f"[gtr] page {page}/{total_pages or '?'} => kept {kept} records (total {downloaded})"
-            )
+            should_log = page == 1 or (log_every and page % log_every == 0)
+            if should_log:
+                print(
+                    f"[gtr] page {page}/{total_pages or '?'} => kept {kept} records (total {downloaded})"
+                )
             if total_pages is None:
                 if not batch:
                     break
@@ -147,7 +176,8 @@ def download_gtr(
                 if page >= total_pages:
                     break
             page += 1
-            time.sleep(0.5)
+            if delay:
+                time.sleep(delay)
 
     metadata = {
         "resource": resource,
@@ -186,23 +216,81 @@ def download_digital(extract: bool, overwrite: bool) -> None:
             print(f"[ok] extracted {archive.name} -> {folder.relative_to(BASE_DIR)}")
 
 
-def download_msti_gbard(*, placeholder: bool = False) -> None:
-    """Placeholder for the MSTI download flow.
+def _build_oecd_key(countries: List[str]) -> str:
+    refs = "+".join(countries)
+    # REF_AREA . FREQ . MEASURE . SEO . FUNDMODE . TRANSCOORD . UNIT . PRICE
+    parts = [refs, "A", "C", "", "_T", "_Z", "", ""]
+    return ".".join(parts)
 
-    The OECD SDMX endpoint occasionally changes the expected key ordering. The
-    recommendation from the Gemini strategy is to pull GBARD by socio-economic
-    objective (NABS 2007) for the UK plus comparator countries, then persist the
-    flattened CSV under `data/raw/msti/`.
 
-    Until the exact SDMX query is nailed, this function simply raises with a
-    helpful message so the developer running the script knows what to do next.
-    """
+def _parse_sdmx_json(payload: Dict[str, Any]) -> pd.DataFrame:
+    """Convert SDMX-JSON data (from OECD) into a tidy DataFrame."""
 
-    raise NotImplementedError(
-        "MSTI / GBARD download not implemented yet. Use the OECD Data Explorer to "
-        "export the required table, then drop the CSV into data/raw/msti/ along "
-        "with a MANIFEST.md describing the query."
-    )
+    structures = payload["data"]["structures"][0]
+    series_dims = structures["dimensions"]["series"]
+    obs_dims = structures["dimensions"]["observation"]
+    dataset = payload["data"]["dataSets"][0]
+
+    obs_dimension = obs_dims[0]
+    time_values = obs_dimension["values"]
+
+    rows: List[Dict[str, Any]] = []
+    for key, series_data in dataset["series"].items():
+        indices = [int(idx) for idx in key.split(":")]
+        dim_values = {}
+        for dim_meta, idx in zip(series_dims, indices):
+            dim_values[dim_meta["id"]] = dim_meta["values"][idx]["id"]
+
+        for obs_idx, values in series_data["observations"].items():
+            obs_value = values[0]
+            time_index = int(obs_idx)
+            time_period = time_values[time_index]["id"]
+            rows.append({**dim_values, "TIME_PERIOD": time_period, "value": obs_value})
+
+    return pd.DataFrame(rows)
+
+
+def download_msti_gbard(
+    *,
+    countries: List[str],
+    start_year: int,
+    end_year: int,
+    output_stem: Optional[str],
+) -> Dict[str, Path]:
+    """Download GBARD-by-SEO data for the requested countries and years."""
+
+    raw_dir = RAW_DIR / "msti"
+    processed_dir = Path("data/processed")
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    processed_dir.mkdir(parents=True, exist_ok=True)
+
+    key = _build_oecd_key(countries)
+    params = {
+        "startPeriod": str(start_year),
+        "endPeriod": str(end_year),
+        "dimensionAtObservation": "TIME_PERIOD",
+        "detail": "dataonly",
+    }
+    headers = {"Accept": "application/vnd.sdmx.data+json;version=2.0"}
+    url = f"{OECD_BASE_URL}/data/{OECD_GBARD_FLOW}/{key}"
+    response = requests.get(url, params=params, headers=headers, timeout=120)
+    response.raise_for_status()
+
+    raw_name = output_stem or f"gbard_{start_year}_{end_year}.json"
+    raw_path = raw_dir / raw_name
+    raw_path.write_text(response.text)
+
+    df = _parse_sdmx_json(response.json())
+    df["value"] = pd.to_numeric(df["value"], errors="coerce")
+    df = df.dropna(subset=["value"])
+
+    # Focus on the most useful units (PPP dollars + % of GDP)
+    df_filtered = df[df["UNIT_MEASURE"].isin(["USD_PPP", "XDC", "PT_B1GQ"])].copy()
+    df_filtered["REF_AREA_NAME"] = df_filtered["REF_AREA"].map(REF_AREA_LABELS.get)
+
+    csv_path = processed_dir / f"msti_gbard_{start_year}_{end_year}.csv"
+    df_filtered.to_csv(csv_path, index=False)
+    return {"raw": raw_path, "csv": csv_path}
 
 
 def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
@@ -214,6 +302,7 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     gtr.add_argument("--since-year", type=int, default=None)
     gtr.add_argument("--fetch-size", type=int, default=200)
     gtr.add_argument("--max-pages", type=int, default=None, help="Limit pages for testing")
+    gtr.add_argument("--delay", type=float, default=0.2, help="Delay between API calls (seconds)")
     gtr.add_argument("--output-name", default=None, help="Override output filename")
 
     digital = subparsers.add_parser("digital", help="Download Ofcom digital infrastructure files")
@@ -221,7 +310,14 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     digital.add_argument("--overwrite", action="store_true", help="Re-download even if files exist")
 
     msti = subparsers.add_parser("msti", help="Download MSTI / GBARD extracts")
-    msti.add_argument("--run", action="store_true", help="Explicitly acknowledge the placeholder")
+    msti.add_argument(
+        "--countries",
+        default="GBR,USA,DEU,FRA,JPN,CAN,ITA",
+        help="Comma-separated ISO country codes to include",
+    )
+    msti.add_argument("--start-year", type=int, default=2010)
+    msti.add_argument("--end-year", type=int, default=datetime.utcnow().year)
+    msti.add_argument("--output-stem", default=None, help="Override raw JSON filename")
 
     return parser.parse_args(argv)
 
@@ -235,6 +331,7 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
             fetch_size=args.fetch_size,
             max_pages=args.max_pages,
             output_name=args.output_name,
+            delay=args.delay,
         )
         print(
             f"[done] fetched {stats.records} {args.resource} rows across {stats.pages} pages in {stats.duration_s:.1f}s"
@@ -242,7 +339,17 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
     elif args.command == "digital":
         download_digital(extract=args.extract, overwrite=args.overwrite)
     elif args.command == "msti":
-        download_msti_gbard()
+        countries = [c.strip().upper() for c in args.countries.split(",") if c.strip()]
+        paths = download_msti_gbard(
+            countries=countries,
+            start_year=args.start_year,
+            end_year=args.end_year,
+            output_stem=args.output_stem,
+        )
+        print(
+            "[done] downloaded MSTI GBARD data "
+            f"(raw: {paths['raw']}, csv: {paths['csv']})"
+        )
     else:
         raise ValueError(f"Unknown command {args.command}")
 

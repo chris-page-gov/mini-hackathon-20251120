@@ -11,6 +11,10 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - Data acquisition tooling:
   - `src/data_download.py` helper for GtR+ and Ofcom downloads (with placeholders for future MSTI pulls).
   - Structured `data/` workspace (tracked README + manifests, raw/processed folders kept out of git) plus cached Connected Nations Spring 2025 bundles for immediate analysis.
+- OECD + IMD ingestion:
+  - `python src/data_download.py msti` now pulls GBARD-by-SEO data (SDMX JSON saved under `data/raw/msti/` + processed CSV in `data/processed/`).
+  - `data/raw/imd` stores the LAD-level deprivation summary (File 10 from the 2019 release) with a manifest for provenance.
+  - `src/build_lad_metrics.py` aggregates Ofcom + IMD metrics into `data/processed/lad_digital_metrics.{parquet,csv}` for mapping and levelling-up analysis.
 
 ## [0.1.0] - 2025-11-18
 
