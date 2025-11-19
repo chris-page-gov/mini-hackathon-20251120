@@ -1,0 +1,35 @@
+[project]
+name = "mini-hackathon-20251120"
+version = "0.1.0"
+description = "Streamlit app and pipelines for the UK mini hackathon"
+authors = [{ name = "UK Hackathon Team" }]
+requires-python = ">=3.11"
+dependencies = [
+    "pandas",
+    "numpy",
+    "pyarrow",
+    "plotly",
+    "matplotlib",
+    "seaborn",
+    "networkx",
+    "geopandas",
+    "shapely",
+    "fiona",
+    "rtree",
+    "requests",
+    "openpyxl",
+    "xlrd",
+    "notebook",
+    "jupyterlab",
+    "ipykernel",
+    "tqdm",
+    "python-dotenv",
+    "pandasdmx",
+    "streamlit",
+]
+
+[project.optional-dependencies]
+dev = ["black", "ruff"]
+
+[tool.uv]
+managed = true

@@ -14,9 +14,8 @@ RUN apt-get update \
         unzip \
     && rm -rf /var/lib/apt/lists/*
 
-# Pre-install Python dependencies defined in the workspace requirements file.
-COPY requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt
-
-# Clean up temporary files.
-RUN rm /tmp/requirements.txt
+# Install uv globally so dependency installs can run without manual steps.
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
+    && mv /root/.local/bin/uv /usr/local/bin/uv \
+    && mv /root/.local/bin/uvx /usr/local/bin/uvx \
+    && rm -rf /root/.local

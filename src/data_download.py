@@ -120,6 +120,7 @@ def download_gtr(
     output_name: Optional[str],
     delay: float,
     log_every: int = 100,
+    resume: bool = False,
 ) -> DownloadStats:
     resource = resource.lower()
     if resource not in GTR_RESOURCE_KEYS:
@@ -137,10 +138,46 @@ def download_gtr(
 
     total_pages = None
     downloaded = 0
-    page = 1
+    start_page = 1
+    file_mode = "w"
+    existing_meta = None
+    if resume and output_file.exists():
+        if meta_file.exists():
+            existing_meta = json.loads(meta_file.read_text())
+            last_page = existing_meta.get("last_page")
+            if existing_meta.get("status") == "completed":
+                print("[gtr] existing download already marked completed; remove the meta file to restart.")
+                return DownloadStats(
+                    records=existing_meta.get("records_kept", 0),
+                    pages=existing_meta.get("last_page", 0),
+                    duration_s=0.0,
+                )
+            start_page = (last_page or 0) + 1
+            downloaded = existing_meta.get("records_kept", 0)
+            total_pages = existing_meta.get("total_pages_reported")
+            print(f"[gtr] resuming from page {start_page}")
+        else:
+            raise FileNotFoundError(
+                "Cannot resume without existing metadata. Remove the NDJSON file or rerun without --resume."
+            )
+        file_mode = "a"
     start_time = time.time()
 
-    with output_file.open("w", encoding="utf-8") as sink:
+    meta_state = {
+        "resource": resource,
+        "since_year": since_year,
+        "fetch_size": fetch_size,
+        "max_pages": max_pages,
+        "records_kept": downloaded,
+        "total_pages_reported": total_pages,
+        "status": "in_progress",
+        "last_page": start_page - 1,
+        "downloaded_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%MZ"),
+    }
+    meta_file.write_text(json.dumps(meta_state, indent=2))
+
+    with output_file.open(file_mode, encoding="utf-8") as sink:
+        page = start_page
         while True:
             if max_pages is not None and page > max_pages:
                 break
@@ -178,17 +215,25 @@ def download_gtr(
             page += 1
             if delay:
                 time.sleep(delay)
+            meta_state.update(
+                {
+                    "records_kept": downloaded,
+                    "total_pages_reported": total_pages,
+                    "status": "in_progress",
+                    "last_page": page - 1,
+                }
+            )
+            meta_file.write_text(json.dumps(meta_state, indent=2))
 
-    metadata = {
-        "resource": resource,
-        "since_year": since_year,
-        "fetch_size": fetch_size,
-        "max_pages": max_pages,
-        "records_kept": downloaded,
-        "total_pages_reported": total_pages,
-        "downloaded_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%MZ"),
-    }
-    meta_file.write_text(json.dumps(metadata, indent=2))
+    meta_state.update(
+        {
+            "records_kept": downloaded,
+            "total_pages_reported": total_pages,
+            "status": "completed",
+            "last_page": page - 1,
+        }
+    )
+    meta_file.write_text(json.dumps(meta_state, indent=2))
     duration = time.time() - start_time
     print(f"[gtr] wrote {downloaded} records to {output_file.relative_to(BASE_DIR)}")
     return DownloadStats(records=downloaded, pages=(page - 1), duration_s=duration)
@@ -303,6 +348,7 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     gtr.add_argument("--fetch-size", type=int, default=200)
     gtr.add_argument("--max-pages", type=int, default=None, help="Limit pages for testing")
     gtr.add_argument("--delay", type=float, default=0.2, help="Delay between API calls (seconds)")
+    gtr.add_argument("--resume", action="store_true", help="Resume from existing NDJSON/meta files")
     gtr.add_argument("--output-name", default=None, help="Override output filename")
 
     digital = subparsers.add_parser("digital", help="Download Ofcom digital infrastructure files")
@@ -332,6 +378,7 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
             max_pages=args.max_pages,
             output_name=args.output_name,
             delay=args.delay,
+            resume=args.resume,
         )
         print(
             f"[done] fetched {stats.records} {args.resource} rows across {stats.pages} pages in {stats.duration_s:.1f}s"

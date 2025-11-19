@@ -7,6 +7,7 @@ Notes
 
 - `projects_sample.ndjson` was generated via `python src/data_download.py gtr --resource projects --since-year 2018 --fetch-size 50 --max-pages 1`.
 - Pagination metadata is stored in `projects_sample_meta.json`.
+- `projects_since2015.ndjson` is the long-running download (started with `python src/data_download.py gtr --resource projects --since-year 2015 --delay 0.15`). If it is interrupted, rerun with `--resume` to continue where it left off using the meta file.
 - Increase `--max-pages` (or remove it) to pull the full cohort, and optionally switch to `organisations`, `persons`, or `outcomes` using the same script.
 
 Next steps

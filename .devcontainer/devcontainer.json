@@ -16,6 +16,6 @@
       ]
     }
   },
-  "postCreateCommand": "pip install --no-cache-dir -r requirements.txt",
+  "postCreateCommand": "uv sync --frozen",
   "remoteUser": "vscode"
 }

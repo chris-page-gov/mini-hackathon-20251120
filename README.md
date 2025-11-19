@@ -32,6 +32,9 @@ python src/data_download.py digital --extract
 # Pull a recent slice of GtR+ projects (adjust --since-year / --max-pages as needed)
 python src/data_download.py gtr --resource projects --since-year 2015 --max-pages 50
 
+# Resume a long GtR download if it was interrupted
+python src/data_download.py gtr --resource projects --since-year 2015 --resume
+
 # Fetch OECD MSTI / GBARD data (adjust countries / years as needed)
 python src/data_download.py msti --countries GBR,USA,DEU,FRA,JPN,CAN,ITA --start-year 2010 --end-year 2024
 
@@ -40,6 +43,16 @@ python src/build_lad_metrics.py
 ```
 
 The script writes into `data/raw/…` (ignored by git); keep short MANIFEST.md notes in those folders so others know which filters you used. Processed artefacts (Parquet/CSV) land under `data/processed/` ready for analysis or feeding the Streamlit app.
+
+## Environment setup (uv)
+
+This repo now uses [uv](https://github.com/astral-sh/uv) for dependency management (the devcontainer installs it automatically). For local setups:
+
+1. Install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+2. Create/update the virtual environment: `uv sync`
+3. Run commands via uv, e.g.:
+   - `uv run python src/data_download.py ...`
+   - `uv run streamlit run Home.py`
 
 ## Repository structure
 
