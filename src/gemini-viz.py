@@ -1,9 +1,21 @@
+from pathlib import Path
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 # 1. Load and Filter Data
-df = pd.read_csv('OECD.STI.STP,DSD_RDS_GOV@DF_GBARD_NABS07,1.0+all.csv')
+data_path = (
+    Path(__file__).resolve().parent.parent
+    / 'data/raw/msti/OECD.STI.STP,DSD_RDS_GOV@DF_GBARD_NABS07,1.0+all.csv'
+)
+
+if not data_path.exists():
+    raise FileNotFoundError(
+        f"Expected MSTI extract at {data_path}; run the msti downloader first."
+    )
+
+df = pd.read_csv(data_path, low_memory=False)
 
 # Define comparison group: UK, US, and Major EU Economies
 target_countries = ['GBR', 'USA', 'DEU', 'FRA', 'ITA', 'ESP', 'NLD']

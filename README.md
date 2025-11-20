@@ -38,6 +38,9 @@ python src/data_download.py gtr --resource projects --since-year 2015 --resume
 # Fetch OECD MSTI / GBARD data (adjust countries / years as needed)
 python src/data_download.py msti --countries GBR,USA,DEU,FRA,JPN,CAN,ITA --start-year 2010 --end-year 2024
 
+# Generate the MSTI Gemini visuals (expects the OECD CSV in data/raw/msti/)
+python src/gemini-viz.py
+
 # Build LAD-level digital + deprivation metrics for mapping
 python src/build_lad_metrics.py
 ```
